@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ArduinoVault — Parts Inventory</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    :root {
+      --bg:        #0a0c10;
+      --surface:   #111318;
+      --card:      #161b22;
+      --border:    #21262d;
+      --accent:    #00e5a0;
+      --accent2:   #00b8ff;
+      --danger:    #ff4d6d;
+      --text:      #e6edf3;
+      --muted:     #7d8590;
+      --font-head: 'Syne', sans-serif;
+      --font-mono: 'Space Mono', monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-head);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,229,160,.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,160,.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── NAVBAR ── */
+    .navbar {
+      background: rgba(10,12,16,.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 0;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    .navbar-brand {
+      font-family: var(--font-head);
+      font-weight: 800;
+      font-size: 1.4rem;
+      color: var(--text) !important;
+      letter-spacing: -0.5px;
+    }
+    .navbar-brand span { color: var(--accent); }
+    .brand-badge {
+      background: var(--accent);
+      color: var(--bg);
+      font-size: .6rem;
+      font-family: var(--font-mono);
+      padding: 2px 6px;
+      border-radius: 3px;
+      vertical-align: middle;
+      margin-left: 6px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    .nav-stat { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); }
+    .nav-stat strong { color: var(--accent); }
+
+    /* ── SYNC STATUS ── */
+    .sync-pill {
+      font-family: var(--font-mono);
+      font-size: .65rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all .3s;
+    }
+    .sync-pill.synced  { background: rgba(0,229,160,.1);  border: 1px solid rgba(0,229,160,.3);  color: var(--accent); }
+    .sync-pill.syncing { background: rgba(0,184,255,.1);  border: 1px solid rgba(0,184,255,.3);  color: var(--accent2); }
+    .sync-pill.error   { background: rgba(255,77,109,.1); border: 1px solid rgba(255,77,109,.3); color: var(--danger); }
+    .sync-pill.offline { background: rgba(100,100,100,.1);border: 1px solid var(--border);       color: var(--muted); }
+    .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .sync-pill.syncing .sync-dot {
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative;
+      padding: 5rem 0 3rem;
+      z-index: 1;
+      text-align: center;
+    }
+    .hero-tag {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: .7rem;
+      letter-spacing: 3px;
+      color: var(--accent);
+      text-transform: uppercase;
+      border: 1px solid rgba(0,229,160,.3);
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 1.2rem;
+      background: rgba(0,229,160,.05);
+    }
+    .hero h1 {
+      font-size: clamp(2.4rem, 5vw, 4rem);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -1.5px;
+      margin-bottom: .8rem;
+    }
+    .hero h1 em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p { color: var(--muted); font-size: 1.05rem; max-width: 500px; margin: 0 auto 2rem; line-height: 1.7; }
+
+    /* ── API CONFIG BANNER ── */
+    .config-banner {
+      background: linear-gradient(135deg, rgba(255,193,7,.08), rgba(255,77,109,.05));
+      border: 1px solid rgba(255,193,7,.3);
+      border-radius: 12px;
+      padding: 1.2rem 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 1;
+    }
+    .config-banner.hidden { display: none; }
+    .config-banner .icon { font-size: 1.5rem; flex-shrink: 0; }
+    .config-banner .text { flex: 1; }
+    .config-banner .text h6 { font-weight: 700; font-size: .88rem; margin: 0 0 .2rem; color: #ffc107; }
+    .config-banner .text p  { font-family: var(--font-mono); font-size: .72rem; color: var(--muted); margin: 0; line-height: 1.6; }
+    .config-banner input {
+      background: var(--surface);
+      border: 1px solid rgba(255,193,7,.4);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: .75rem;
+      padding: .5rem 1rem;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 420px;
+      margin-top: .5rem;
+    }
+    .config-banner input:focus { outline: none; border-color: #ffc107; box-shadow: 0 0 0 2px rgba(255,193,7,.15); }
+    .btn-save-url {
+      background: rgba(255,193,7,.12);
+      border: 1px solid rgba(255,193,7,.4);
+      color: #ffc107;
+      font-family: var(--font-mono);
+      font-size: .72rem;
+      padding: .5rem 1.2rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all .2s;
+      white-space: nowrap;
+      margin-top: .5rem;
+    }
+    .btn-save-url:hover { background: rgba(255,193,7,.2); }
+
+    /* ── SEARCH ── */
+    .search-wrap {
+      position: relative;
+      max-width: 600px;
+      margin: 0 auto 1rem;
+    }
+    .search-wrap .bi-search {
+      position: absolute;
+      left: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 1rem;
+      pointer-events: none;
+    }
+    #searchInput {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: .9rem;
+      padding: .85rem 1rem .85rem 3rem;
+      border-radius: 10px;
+      width: 100%;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    #searchInput:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,229,160,.12); background: var(--card); }
+    #searchInput::placeholder { color: var(--muted); }
+    .filter-pills { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; margin-bottom: .5rem; }
+    .filter-pill {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: .7rem;
+      padding: 5px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .filter-pill:hover, .filter-pill.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+    /* ── STATS BAR ── */
+    .stats-bar { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; margin-bottom: 2.5rem; position: relative; z-index: 1; }
+    .stat-chip { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: .6rem 1.2rem; text-align: center; min-width: 100px; }
+    .stat-chip .val { font-family: var(--font-mono); font-size: 1.4rem; font-weight: 700; color: var(--accent); line-height: 1; }
+    .stat-chip .lbl { font-size: .65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; font-family: var(--font-mono); }
+
+    /* ── RESULTS ── */
+    .results-meta { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); margin-bottom: 1.5rem; }
+    .results-meta strong { color: var(--text); }
+
+    /* ── PART CARDS ── */
+    .parts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.2rem; position: relative; z-index: 1; }
+    .part-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; transition: transform .2s, border-color .2s, box-shadow .2s; animation: fadeUp .4s ease both; }
+    .part-card:hover { transform: translateY(-4px); border-color: rgba(0,229,160,.3); box-shadow: 0 12px 40px rgba(0,229,160,.07); }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+    .card-img-wrap { position: relative; height: 160px; background: var(--surface); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .card-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 1.2rem; filter: drop-shadow(0 4px 12px rgba(0,0,0,.5)); transition: transform .3s; }
+    .part-card:hover .card-img-wrap img { transform: scale(1.05); }
+    .stock-badge { position: absolute; top: 10px; right: 10px; font-family: var(--font-mono); font-size: .65rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; letter-spacing: .5px; }
+    .stock-high   { background: rgba(0,229,160,.15);  color: var(--accent);  border: 1px solid rgba(0,229,160,.3); }
+    .stock-medium { background: rgba(255,193,7,.12);  color: #ffc107;        border: 1px solid rgba(255,193,7,.3); }
+    .stock-low    { background: rgba(255,77,109,.12); color: var(--danger);  border: 1px solid rgba(255,77,109,.3); }
+    .stock-out    { background: rgba(100,100,100,.15);color: var(--muted);   border: 1px solid var(--border); }
+    .cat-tag { position: absolute; bottom: 10px; left: 10px; font-family: var(--font-mono); font-size: .6rem; letter-spacing: 1px; text-transform: uppercase; padding: 3px 10px; border-radius: 4px; background: rgba(0,184,255,.1); color: var(--accent2); border: 1px solid rgba(0,184,255,.2); }
+
+    .card-body-custom { padding: 1.1rem 1.1rem .9rem; }
+    .part-id   { font-family: var(--font-mono); font-size: .65rem; color: var(--muted); letter-spacing: 1px; margin-bottom: .25rem; }
+    .part-name { font-weight: 700; font-size: 1rem; line-height: 1.3; margin-bottom: .3rem; color: var(--text); }
+    .part-desc { font-size: .78rem; color: var(--muted); margin-bottom: 1rem; line-height: 1.6; }
+
+    .stock-control { display: flex; align-items: center; gap: .6rem; margin-bottom: .9rem; }
+    .stock-label { font-family: var(--font-mono); font-size: .7rem; color: var(--muted); flex: 1; }
+    .stock-label strong { display: block; font-size: 1.3rem; color: var(--text); line-height: 1; }
+    .qty-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 1.1rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all .15s; flex-shrink: 0; line-height: 1; }
+    .qty-btn:hover { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+    .qty-btn:active { transform: scale(.92); }
+    .qty-btn.minus:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+    .qty-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .card-actions { display: flex; gap: .5rem; }
+    .btn-qr  { flex: 1; background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: var(--font-mono); font-size: .7rem; padding: .45rem; border-radius: 8px; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 5px; }
+    .btn-qr:hover { border-color: var(--accent2); color: var(--accent2); background: rgba(0,184,255,.06); }
+    .btn-view { flex: 2; background: rgba(0,229,160,.08); border: 1px solid rgba(0,229,160,.25); color: var(--accent); font-family: var(--font-mono); font-size: .7rem; padding: .45rem; border-radius: 8px; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 5px; }
+    .btn-view:hover { background: var(--accent); color: var(--bg); }
+    .btn-del  { flex: 1; background: transparent; border: 1px solid var(--border); color: var(--muted); font-family: var(--font-mono); font-size: .7rem; padding: .45rem; border-radius: 8px; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; }
+    .btn-del:hover { border-color: var(--danger); color: var(--danger); background: rgba(255,77,109,.06); }
+
+    /* ── NO RESULTS / LOADING ── */
+    .no-results { text-align: center; padding: 5rem 1rem; display: none; }
+    .no-results .icon { font-size: 3rem; color: var(--muted); margin-bottom: 1rem; }
+    .no-results h4 { font-weight: 700; margin-bottom: .5rem; }
+    .no-results p { color: var(--muted); font-size: .9rem; }
+
+    .loading-state { text-align: center; padding: 5rem 1rem; display: none; z-index: 1; position: relative; }
+    .loading-state.visible { display: block; }
+    .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 1.2rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-state p { font-family: var(--font-mono); font-size: .8rem; color: var(--muted); }
+
+    /* ── MODAL ── */
+    .modal-content { background: var(--card); border: 1px solid var(--border); border-radius: 16px; color: var(--text); }
+    .modal-header { border-bottom: 1px solid var(--border); padding: 1.2rem 1.5rem; }
+    .modal-title { font-weight: 800; font-size: 1.1rem; }
+    .btn-close { filter: invert(1) grayscale(1) opacity(.6); }
+    .modal-body { padding: 1.5rem; }
+
+    .detail-img { background: var(--surface); border-radius: 12px; padding: 1.5rem; text-align: center; margin-bottom: 1.2rem; }
+    .detail-img img { max-height: 180px; object-fit: contain; }
+    .detail-meta { font-family: var(--font-mono); font-size: .78rem; }
+    .detail-meta .row { margin-bottom: .5rem; }
+    .detail-meta .key { color: var(--muted); }
+    .detail-meta .val { color: var(--text); font-weight: 700; }
+    .spec-chip { display: inline-block; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-family: var(--font-mono); font-size: .68rem; padding: 3px 10px; margin: 3px; color: var(--muted); }
+
+    .qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+    #qrCanvas { background: #fff; padding: 12px; border-radius: 10px; }
+    .qr-url { font-family: var(--font-mono); font-size: .7rem; color: var(--muted); word-break: break-all; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .7rem 1rem; width: 100%; }
+    .qr-hint { font-size: .8rem; color: var(--muted); text-align: center; line-height: 1.6; }
+
+    /* Form inputs */
+    .form-control-dark {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: .85rem;
+      border-radius: 8px;
+    }
+    .form-control-dark:focus { background: var(--card); border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,229,160,.1); color: var(--text); outline: none; }
+    .form-label-dark { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); }
+
+    /* ── TOAST ── */
+    .toast-container { z-index: 9999; }
+    .custom-toast { background: var(--card); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-family: var(--font-mono); font-size: .78rem; min-width: 220px; }
+    .custom-toast .toast-body { display: flex; align-items: center; gap: 8px; }
+
+    /* ── FOOTER ── */
+    footer { position: relative; z-index: 1; border-top: 1px solid var(--border); padding: 1.8rem 0; text-align: center; font-family: var(--font-mono); font-size: .72rem; color: var(--muted); margin-top: 4rem; }
+    footer span { color: var(--accent); }
+
+    mark { background: rgba(0,229,160,.2); color: var(--accent); border-radius: 3px; padding: 0 2px; }
+
+    @media (max-width: 576px) {
+      .parts-grid { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 2rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-expand-lg">
+  <div class="container">
+    <a class="navbar-brand" href="#">
+      <i class="bi bi-cpu-fill me-2" style="color:var(--accent)"></i>Arduino<span>Vault</span>
+      <span class="brand-badge">LIVE</span>
+    </a>
+    <div class="ms-auto d-flex align-items-center gap-3">
+      <span class="nav-stat d-none d-sm-block">Parts: <strong id="navTotalParts">—</strong></span>
+      <span class="nav-stat d-none d-sm-block">Units: <strong id="navTotalUnits">—</strong></span>
+      <span class="sync-pill offline" id="syncPill">
+        <span class="sync-dot"></span>
+        <span id="syncText">Not connected</span>
+      </span>
+      <button class="btn btn-sm" style="background:rgba(0,229,160,.1);border:1px solid rgba(0,229,160,.3);color:var(--accent);font-family:var(--font-mono);font-size:.72rem;border-radius:8px;"
+        onclick="openAddModal()">
+        <i class="bi bi-plus-lg me-1"></i>Add Part
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- TOAST -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="liveToast" class="toast custom-toast" role="alert" data-bs-delay="2500">
+    <div class="toast-body">
+      <span id="toastIcon">✓</span>
+      <span id="toastMsg">Action performed</span>
+    </div>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-tag"><i class="bi bi-cloud-check-fill me-1"></i>Google Sheets · Live Sync</div>
+    <h1>Your Arduino<br/><em>Parts Vault</em></h1>
+    <p>Search, track, and manage your electronics inventory — powered by Google Sheets, no backend required.</p>
+    <div class="search-wrap">
+      <i class="bi bi-search"></i>
+      <input type="text" id="searchInput" placeholder="Search parts, categories, specs…" autocomplete="off"/>
+    </div>
+    <div class="filter-pills" id="filterPills">
+      <span class="filter-pill active" data-cat="all">All</span>
+    </div>
+  </div>
+</section>
+
+<!-- CONFIG BANNER -->
+<div class="container">
+  <div class="config-banner" id="configBanner">
+    <div class="icon">⚡</div>
+    <div class="text" style="flex:1">
+      <h6>Connect to Google Sheets</h6>
+      <p>Paste your Apps Script Web App URL below. Deploy your script as a Web App (Execute as: Me, Access: Anyone) then copy the URL here.</p>
+      <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"/>
+        <button class="btn-save-url" onclick="saveApiUrl()"><i class="bi bi-plug-fill me-1"></i>Connect</button>
+        <button class="btn-save-url" style="background:rgba(100,100,100,.1);border-color:var(--border);color:var(--muted);" onclick="loadDemo()">
+          <i class="bi bi-box-fill me-1"></i>Use Demo Data
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STATS BAR -->
+<div class="container">
+  <div class="stats-bar">
+    <div class="stat-chip"><div class="val" id="statTotal">—</div><div class="lbl">Part Types</div></div>
+    <div class="stat-chip"><div class="val" id="statUnits">—</div><div class="lbl">Total Units</div></div>
+    <div class="stat-chip"><div class="val" id="statLow">—</div><div class="lbl">Low Stock</div></div>
+    <div class="stat-chip"><div class="val" id="statOut">—</div><div class="lbl">Out of Stock</div></div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<main class="container pb-5">
+  <div class="results-meta" id="resultsMeta"></div>
+
+  <!-- LOADING -->
+  <div class="loading-state" id="loadingState">
+    <div class="spinner"></div>
+    <p>Fetching inventory from Google Sheets…</p>
+  </div>
+
+  <div class="parts-grid" id="partsGrid"></div>
+  <div class="no-results" id="noResults">
+    <div class="icon"><i class="bi bi-search"></i></div>
+    <h4>No parts found</h4>
+    <p>Try a different search term or clear the filter.</p>
+  </div>
+</main>
+
+<footer>
+  <div class="container">
+    <span>Arduino</span>Vault &nbsp;·&nbsp; Powered by Google Sheets &nbsp;·&nbsp; <span id="lastSyncTime">Never synced</span>
+    &nbsp;·&nbsp; <a href="#" onclick="loadParts()" style="color:var(--accent2);text-decoration:none;"><i class="bi bi-arrow-clockwise"></i> Refresh</a>
+  </div>
+</footer>
+
+<!-- ── DETAIL MODAL ── -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="detailTitle">Part Detail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="detail-img"><img id="detailImg" src="" alt=""/></div>
+            <div class="text-center mb-2"><span class="stock-badge" id="detailStockBadge"></span></div>
+          </div>
+          <div class="col-md-8">
+            <div class="part-id" id="detailId"></div>
+            <h4 id="detailName" class="fw-bold mb-1"></h4>
+            <p id="detailDesc" style="color:var(--muted);font-size:.88rem;line-height:1.7;"></p>
+            <div class="detail-meta" id="detailMeta"></div>
+            <div id="detailSpecs" class="mt-2"></div>
+            <div class="stock-control mt-3" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.8rem 1rem;">
+              <div class="stock-label">In Stock<strong id="detailStockNum">0</strong></div>
+              <button class="qty-btn minus" id="detailMinus"><i class="bi bi-dash"></i></button>
+              <button class="qty-btn plus"  id="detailPlus"><i class="bi bi-plus"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── QR MODAL ── -->
+<div class="modal fade" id="qrModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:360px">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-qr-code me-2" style="color:var(--accent2)"></i>QR Code</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="qr-wrap">
+          <p style="font-size:.8rem;color:var(--muted);text-align:center;margin:0 0 .5rem;">Scan to open <strong id="qrPartName" style="color:var(--text)"></strong></p>
+          <div id="qrCanvas"></div>
+          <div class="qr-url" id="qrUrl"></div>
+          <p class="qr-hint">Scanning this code will open the part detail page directly in your browser.</p>
+          <button class="btn-view w-100" style="flex:none;padding:.6rem;" onclick="copyQrUrl()">
+            <i class="bi bi-clipboard me-1"></i> Copy Link
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD / EDIT PART MODAL ── -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addModalTitle"><i class="bi bi-plus-circle me-2" style="color:var(--accent)"></i>Add New Part</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editId"/>
+        <div class="mb-3">
+          <label class="form-label form-label-dark">Part Name *</label>
+          <input type="text" id="addName" class="form-control form-control-dark" placeholder="e.g. NPN Transistor BC547"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-dark">Category *</label>
+          <input type="text" id="addCat" class="form-control form-control-dark" placeholder="e.g. Transistors"/>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-dark">Description</label>
+          <textarea id="addDesc" class="form-control form-control-dark" rows="2" placeholder="Brief description…"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-dark">Specs <span style="color:var(--muted);font-size:.7rem">(comma-separated)</span></label>
+          <input type="text" id="addSpecs" class="form-control form-control-dark" placeholder="e.g. 5V, 100mA, I2C"/>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col">
+            <label class="form-label form-label-dark">Quantity *</label>
+            <input type="number" id="addQty" class="form-control form-control-dark" min="0" value="10"/>
+          </div>
+          <div class="col">
+            <label class="form-label form-label-dark">Image URL</label>
+            <input type="text" id="addImg" class="form-control form-control-dark" placeholder="https://…"/>
+          </div>
+        </div>
+        <button class="btn-view w-100" style="flex:none;padding:.75rem;font-size:.82rem;" id="addSubmitBtn" onclick="submitPart()">
+          <i class="bi bi-plus-lg me-1"></i> Add to Inventory
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── DELETE CONFIRM MODAL ── -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:380px">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" style="color:var(--danger)"><i class="bi bi-trash me-2"></i>Delete Part?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:.88rem;color:var(--muted);">Are you sure you want to delete <strong id="deletePartName" style="color:var(--text)"></strong>? This will remove it from your Google Sheet and cannot be undone.</p>
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn-qr" style="flex:1;padding:.6rem;" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn-view" style="flex:1;padding:.6rem;background:rgba(255,77,109,.12);border-color:rgba(255,77,109,.3);color:var(--danger);" onclick="confirmDelete()">
+            <i class="bi bi-trash me-1"></i> Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+<script>
+/* ════════════════════════════════════════════
+   CONFIG & STATE
+════════════════════════════════════════════ */
+const STORAGE_KEY_URL  = 'arduinovault_api_url';
+const STORAGE_KEY_DATA = 'arduinovault_cache';
+
+let API_URL       = localStorage.getItem(STORAGE_KEY_URL) || '';
+let parts         = [];
+let currentFilter = 'all';
+let searchQuery   = '';
+let activeQrId    = null;
+let activeDetailId = null;
+let pendingDeleteId = null;
+let qrInstance    = null;
+let isDemoMode    = false;
+
+/* ════════════════════════════════════════════
+   DEMO DATA (fallback when no API connected)
+════════════════════════════════════════════ */
+const DEMO_PARTS = [
+  { id:'ARD-001', name:'Arduino Uno R3',        category:'Microcontrollers', desc:'ATmega328P-based development board. The classic Arduino for prototyping and learning.',          qty:14, img:'https://store.arduino.cc/cdn/shop/files/A000066_03.front_1000x750.jpg', specs:['ATmega328P','14 Digital I/O','6 Analog In','16 MHz','USB-B'] },
+  { id:'ARD-002', name:'Arduino Nano',           category:'Microcontrollers', desc:'Compact ATmega328P board. Breadboard-friendly with all the Uno features in a tiny footprint.',   qty:22, img:'https://store.arduino.cc/cdn/shop/files/ABX00028_01.front_1000x750.jpg',specs:['ATmega328P','22 I/O pins','8 Analog In','Mini-USB','30mm × 18mm'] },
+  { id:'SEN-001', name:'DHT22 Temp & Humidity',  category:'Sensors',          desc:'Digital temperature and humidity sensor with high precision. Single-wire interface.',            qty:31, img:'https://cdn-shop.adafruit.com/970x728/385-00.jpg',                      specs:['−40–80°C','0–100% RH','±0.5°C','3–5V','Single-wire'] },
+  { id:'SEN-002', name:'HC-SR04 Ultrasonic',     category:'Sensors',          desc:'Ultrasonic distance sensor. Measures 2 cm to 400 cm using sound pulses.',                        qty:18, img:'https://cdn-shop.adafruit.com/970x728/3942-07.jpg',                     specs:['2–400 cm','5V','15 mA','40 kHz','15° angle'] },
+  { id:'MOD-001', name:'HC-05 Bluetooth Module', category:'Communication',    desc:'Classic Bluetooth 2.0 serial module. Pair with any device to add wireless serial comms.',         qty:7,  img:'https://cdn-shop.adafruit.com/970x728/1358-00.jpg',                     specs:['BT 2.0','3.3V logic','3–6V power','AT commands','UART'] },
+  { id:'DIS-001', name:'OLED 128×64 Display',    category:'Displays',         desc:'0.96" monochrome OLED module. I2C interface, crisp graphics with no backlight needed.',          qty:12, img:'https://cdn-shop.adafruit.com/970x728/326-06.jpg',                      specs:['128×64 px','I2C / SPI','3.3–5V','SSD1306','0.96"'] },
+  { id:'PWR-001', name:'LM7805 Voltage Reg.',    category:'Power',            desc:'Classic 5V linear voltage regulator. TO-220 package, up to 1A output current.',                  qty:45, img:'https://cdn-shop.adafruit.com/970x728/2164-00.jpg',                     specs:['5V output','1A max','TO-220','7–35V input','Linear'] },
+  { id:'ACT-001', name:'SG90 Micro Servo',        category:'Actuators',        desc:'9g micro servo motor. Rotates 180°, perfect for small robotic arms and RC projects.',             qty:20, img:'https://cdn-shop.adafruit.com/970x728/169-00.jpg',                      specs:['180° rotation','4.8–6V','9g weight','PWM control','1.8 kg·cm'] },
+  { id:'PSV-001', name:'10kΩ Resistor ×100',     category:'Passives',         desc:'Pack of 100 × 10kΩ ¼W resistors. Carbon film, ±5% tolerance.',                                   qty:2,  img:'https://cdn-shop.adafruit.com/970x728/2784-00.jpg',                     specs:['10 kΩ','¼ W','±5%','×100 pack','Carbon film'] },
+  { id:'PSV-002', name:'100nF Capacitor ×50',    category:'Passives',         desc:'Ceramic bypass capacitors 100nF. Essential decoupling for every microcontroller circuit.',         qty:0,  img:'https://cdn-shop.adafruit.com/970x728/753-00.jpg',                     specs:['100 nF','50V','Ceramic','×50 pack','THT'] },
+];
+
+/* ════════════════════════════════════════════
+   SYNC STATUS
+════════════════════════════════════════════ */
+function setSyncStatus(state, text) {
+  const pill = document.getElementById('syncPill');
+  pill.className = 'sync-pill ' + state;
+  document.getElementById('syncText').textContent = text;
+}
+
+/* ════════════════════════════════════════════
+   API CONFIG
+════════════════════════════════════════════ */
+function saveApiUrl() {
+  const url = document.getElementById('apiUrlInput').value.trim();
+  if (!url.startsWith('https://script.google.com')) {
+    showToast('Please enter a valid Apps Script URL', '⚠️');
+    return;
+  }
+  API_URL = url;
+  localStorage.setItem(STORAGE_KEY_URL, url);
+  isDemoMode = false;
+  document.getElementById('configBanner').classList.add('hidden');
+  loadParts();
+}
+
+function loadDemo() {
+  isDemoMode = true;
+  API_URL = '';
+  parts = JSON.parse(JSON.stringify(DEMO_PARTS));
+  document.getElementById('configBanner').classList.add('hidden');
+  setSyncStatus('offline', 'Demo mode');
+  updateLastSync('Demo data');
+  renderAll();
+  showToast('Demo mode — changes won\'t persist', 'ℹ️');
+}
+
+/* ════════════════════════════════════════════
+   LOAD FROM GOOGLE SHEETS
+════════════════════════════════════════════ */
+async function loadParts() {
+  if (!API_URL) return;
+
+  setSyncStatus('syncing', 'Syncing…');
+  document.getElementById('loadingState').classList.add('visible');
+  document.getElementById('partsGrid').innerHTML = '';
+
+  try {
+    // Apps Script requires no-cors trick: use redirect mode or append callback
+    // We use a timestamp param to avoid caching
+    const url = API_URL + '?t=' + Date.now();
+    const res  = await fetch(url, { redirect: 'follow' });
+    const data = await res.json();
+
+    if (!data.success) throw new Error(data.error || 'Unknown error');
+
+    parts = data.items.map(p => ({
+      ...p,
+      qty: parseInt(p.qty) || 0,
+      specs: Array.isArray(p.specs) ? p.specs : []
+    }));
+
+    localStorage.setItem(STORAGE_KEY_DATA, JSON.stringify(parts));
+    setSyncStatus('synced', 'Synced');
+    updateLastSync(new Date().toLocaleTimeString());
+    document.getElementById('configBanner').classList.add('hidden');
+
+  } catch (err) {
+    console.error('Load error:', err);
+
+    // Try cache fallback
+    const cached = localStorage.getItem(STORAGE_KEY_DATA);
+    if (cached) {
+      parts = JSON.parse(cached);
+      setSyncStatus('error', 'Cached data');
+      showToast('Offline — showing cached data', '⚠️');
+    } else {
+      setSyncStatus('error', 'Connection failed');
+      showToast('Could not connect to Google Sheets', '❌');
+    }
+  }
+
+  document.getElementById('loadingState').classList.remove('visible');
+  renderAll();
+}
+
+/* ════════════════════════════════════════════
+   SAVE PART TO GOOGLE SHEETS
+════════════════════════════════════════════ */
+async function savePart(part) {
+  if (isDemoMode || !API_URL) return true; // In demo mode, just succeed locally
+
+  setSyncStatus('syncing', 'Saving…');
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' }, // text/plain avoids CORS preflight
+      body: JSON.stringify({ action: 'upsert', ...part })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    setSyncStatus('synced', 'Saved ✓');
+    updateLastSync(new Date().toLocaleTimeString());
+    return true;
+  } catch (err) {
+    console.error('Save error:', err);
+    setSyncStatus('error', 'Save failed');
+    showToast('Save failed — check console', '❌');
+    return false;
+  }
+}
+
+async function deletePart(id) {
+  if (isDemoMode || !API_URL) return true;
+
+  setSyncStatus('syncing', 'Deleting…');
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'delete', id })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    setSyncStatus('synced', 'Deleted');
+    return true;
+  } catch (err) {
+    setSyncStatus('error', 'Delete failed');
+    showToast('Delete failed — check console', '❌');
+    return false;
+  }
+}
+
+/* ════════════════════════════════════════════
+   HELPERS
+════════════════════════════════════════════ */
+function stockClass(qty) {
+  if (qty === 0)   return 'stock-out';
+  if (qty <= 5)    return 'stock-low';
+  if (qty <= 15)   return 'stock-medium';
+  return 'stock-high';
+}
+function stockLabel(qty) {
+  if (qty === 0)   return 'OUT OF STOCK';
+  if (qty <= 5)    return 'LOW STOCK';
+  if (qty <= 15)   return 'IN STOCK';
+  return 'WELL STOCKED';
+}
+function highlight(text, q) {
+  if (!q) return text;
+  const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return text.replace(re, '<mark>$1</mark>');
+}
+function getCategories() {
+  return [...new Set(parts.map(p => p.category))].sort();
+}
+function showToast(msg, icon='✓') {
+  document.getElementById('toastMsg').textContent = msg;
+  document.getElementById('toastIcon').textContent = icon;
+  bootstrap.Toast.getOrCreateInstance(document.getElementById('liveToast')).show();
+}
+function partUrl(id) {
+  return window.location.href.split('?')[0] + '?part=' + encodeURIComponent(id);
+}
+function updateLastSync(time) {
+  document.getElementById('lastSyncTime').textContent = 'Last sync: ' + time;
+}
+function generateId(category, name) {
+  const prefix = category.slice(0,3).toUpperCase();
+  const num = String(parts.length + 1).padStart(3, '0');
+  return `${prefix}-${num}`;
+}
+
+/* ════════════════════════════════════════════
+   RENDER
+════════════════════════════════════════════ */
+function renderPills() {
+  const cats = getCategories();
+  const el = document.getElementById('filterPills');
+  el.innerHTML = `<span class="filter-pill ${currentFilter==='all'?'active':''}" data-cat="all">All</span>`
+    + cats.map(c => `<span class="filter-pill ${currentFilter===c?'active':''}" data-cat="${c}">${c}</span>`).join('');
+  el.querySelectorAll('.filter-pill').forEach(p =>
+    p.addEventListener('click', () => { currentFilter = p.dataset.cat; renderAll(); })
+  );
+}
+
+function renderStats() {
+  const total = parts.length;
+  const units = parts.reduce((s,p) => s + p.qty, 0);
+  const low   = parts.filter(p => p.qty > 0 && p.qty <= 5).length;
+  const out   = parts.filter(p => p.qty === 0).length;
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statUnits').textContent = units;
+  document.getElementById('statLow').textContent   = low;
+  document.getElementById('statOut').textContent   = out;
+  document.getElementById('navTotalParts').textContent = total;
+  document.getElementById('navTotalUnits').textContent = units;
+}
+
+function renderGrid() {
+  const q    = searchQuery.trim().toLowerCase();
+  const grid = document.getElementById('partsGrid');
+  const noRes = document.getElementById('noResults');
+
+  const filtered = parts.filter(p => {
+    const matchCat = currentFilter === 'all' || p.category === currentFilter;
+    const matchQ   = !q ||
+      p.name.toLowerCase().includes(q) ||
+      p.category.toLowerCase().includes(q) ||
+      p.id.toLowerCase().includes(q) ||
+      (p.desc||'').toLowerCase().includes(q) ||
+      (p.specs||[]).some(s => s.toLowerCase().includes(q));
+    return matchCat && matchQ;
+  });
+
+  document.getElementById('resultsMeta').innerHTML = filtered.length
+    ? `Showing <strong>${filtered.length}</strong> of ${parts.length} parts${q?` matching "<strong>${q}</strong>"`:''}`
+    : '';
+
+  if (!filtered.length) { grid.innerHTML = ''; noRes.style.display = 'block'; return; }
+  noRes.style.display = 'none';
+
+  grid.innerHTML = filtered.map((p, i) => {
+    const sc  = stockClass(p.qty);
+    const sl  = stockLabel(p.qty);
+    const fb  = `https://placehold.co/200x120/161b22/00e5a0?text=${encodeURIComponent(p.id)}`;
+    return `
+    <div class="part-card" id="card-${p.id}" style="animation-delay:${i*.04}s">
+      <div class="card-img-wrap">
+        <img src="${p.img||fb}" alt="${p.name}"
+          onerror="this.src='${fb}'"/>
+        <span class="stock-badge ${sc}">${sl}</span>
+        <span class="cat-tag">${p.category}</span>
+      </div>
+      <div class="card-body-custom">
+        <div class="part-id">${highlight(p.id, q)}</div>
+        <div class="part-name">${highlight(p.name, q)}</div>
+        <div class="part-desc">${highlight((p.desc||'').slice(0,80)+'…', q)}</div>
+        <div class="stock-control">
+          <div class="stock-label">Units Available<strong id="qty-${p.id}">${p.qty}</strong></div>
+          <button class="qty-btn minus" onclick="changeQty('${p.id}',-1)" title="Remove one"><i class="bi bi-dash"></i></button>
+          <button class="qty-btn plus"  onclick="changeQty('${p.id}', 1)" title="Add one"><i class="bi bi-plus"></i></button>
+        </div>
+        <div class="card-actions">
+          <button class="btn-del" onclick="openDelete('${p.id}')" title="Delete"><i class="bi bi-trash"></i></button>
+          <button class="btn-qr"  onclick="openQr('${p.id}')"><i class="bi bi-qr-code"></i> QR</button>
+          <button class="btn-view" onclick="openDetail('${p.id}')"><i class="bi bi-eye me-1"></i>View Details</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderAll() {
+  renderPills();
+  renderStats();
+  renderGrid();
+}
+
+/* ════════════════════════════════════════════
+   QTY CONTROL
+════════════════════════════════════════════ */
+let qtyDebounce = {};
+function changeQty(id, delta) {
+  const part = parts.find(p => p.id === id);
+  if (!part) return;
+  part.qty = Math.max(0, part.qty + delta);
+
+  // Update UI without full re-render
+  const el = document.getElementById('qty-' + id);
+  if (el) el.textContent = part.qty;
+  const card = document.getElementById('card-' + id);
+  if (card) {
+    const badge = card.querySelector('.stock-badge');
+    badge.className = 'stock-badge ' + stockClass(part.qty);
+    badge.textContent = stockLabel(part.qty);
+  }
+  if (activeDetailId === id) {
+    document.getElementById('detailStockNum').textContent = part.qty;
+    const db = document.getElementById('detailStockBadge');
+    db.className = 'stock-badge ' + stockClass(part.qty);
+    db.textContent = stockLabel(part.qty);
+  }
+  renderStats();
+  showToast(`${part.name}: ${part.qty} units`, delta>0?'➕':'➖');
+
+  // Debounce save to avoid hammering API on rapid clicks
+  clearTimeout(qtyDebounce[id]);
+  qtyDebounce[id] = setTimeout(() => savePart(part), 800);
+}
+
+/* ════════════════════════════════════════════
+   DETAIL MODAL
+════════════════════════════════════════════ */
+function openDetail(id) {
+  const p = parts.find(x => x.id === id);
+  if (!p) return;
+  activeDetailId = id;
+  const fb = `https://placehold.co/300x200/161b22/00e5a0?text=${encodeURIComponent(p.id)}`;
+  document.getElementById('detailTitle').textContent    = p.name;
+  document.getElementById('detailImg').src              = p.img || fb;
+  document.getElementById('detailImg').onerror          = function(){ this.src = fb; };
+  document.getElementById('detailId').textContent       = `${p.id} · ${p.category}`;
+  document.getElementById('detailName').textContent     = p.name;
+  document.getElementById('detailDesc').textContent     = p.desc || '';
+  document.getElementById('detailStockNum').textContent = p.qty;
+  const badge = document.getElementById('detailStockBadge');
+  badge.className   = 'stock-badge ' + stockClass(p.qty);
+  badge.textContent = stockLabel(p.qty);
+  document.getElementById('detailMeta').innerHTML = `
+    <div class="row"><span class="col-5 key">Part ID</span><span class="col-7 val">${p.id}</span></div>
+    <div class="row"><span class="col-5 key">Category</span><span class="col-7 val">${p.category}</span></div>
+    <div class="row"><span class="col-5 key">In Stock</span><span class="col-7 val">${p.qty} units</span></div>
+  `;
+  document.getElementById('detailSpecs').innerHTML = (p.specs||[]).map(s=>`<span class="spec-chip">${s}</span>`).join('');
+  document.getElementById('detailMinus').onclick = () => changeQty(id, -1);
+  document.getElementById('detailPlus').onclick  = () => changeQty(id,  1);
+  new bootstrap.Modal(document.getElementById('detailModal')).show();
+}
+
+/* ════════════════════════════════════════════
+   QR MODAL
+════════════════════════════════════════════ */
+function openQr(id) {
+  const p = parts.find(x => x.id === id);
+  if (!p) return;
+  activeQrId = id;
+  const url = partUrl(id);
+  document.getElementById('qrPartName').textContent = p.name;
+  document.getElementById('qrUrl').textContent      = url;
+  document.getElementById('qrCanvas').innerHTML     = '';
+  new QRCode(document.getElementById('qrCanvas'), { text: url, width: 200, height: 200, colorDark:'#000', colorLight:'#fff', correctLevel: QRCode.CorrectLevel.M });
+  new bootstrap.Modal(document.getElementById('qrModal')).show();
+}
+function copyQrUrl() {
+  navigator.clipboard.writeText(partUrl(activeQrId)).then(() => showToast('Link copied!', '📋'));
+}
+
+/* ════════════════════════════════════════════
+   ADD / EDIT MODAL
+════════════════════════════════════════════ */
+function openAddModal() {
+  document.getElementById('addModalTitle').innerHTML = '<i class="bi bi-plus-circle me-2" style="color:var(--accent)"></i>Add New Part';
+  document.getElementById('addSubmitBtn').innerHTML  = '<i class="bi bi-plus-lg me-1"></i> Add to Inventory';
+  document.getElementById('editId').value  = '';
+  ['addName','addCat','addDesc','addSpecs','addImg'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('addQty').value = 10;
+  new bootstrap.Modal(document.getElementById('addModal')).show();
+}
+
+function openEditModal(id) {
+  const p = parts.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('addModalTitle').innerHTML = '<i class="bi bi-pencil me-2" style="color:var(--accent2)"></i>Edit Part';
+  document.getElementById('addSubmitBtn').innerHTML  = '<i class="bi bi-check-lg me-1"></i> Save Changes';
+  document.getElementById('editId').value    = id;
+  document.getElementById('addName').value   = p.name;
+  document.getElementById('addCat').value    = p.category;
+  document.getElementById('addDesc').value   = p.desc || '';
+  document.getElementById('addSpecs').value  = (p.specs||[]).join(', ');
+  document.getElementById('addQty').value    = p.qty;
+  document.getElementById('addImg').value    = p.img || '';
+  new bootstrap.Modal(document.getElementById('addModal')).show();
+}
+
+async function submitPart() {
+  const editId  = document.getElementById('editId').value;
+  const name    = document.getElementById('addName').value.trim();
+  const cat     = document.getElementById('addCat').value.trim();
+  const desc    = document.getElementById('addDesc').value.trim();
+  const specsRaw = document.getElementById('addSpecs').value.trim();
+  const qty     = parseInt(document.getElementById('addQty').value) || 0;
+  const img     = document.getElementById('addImg').value.trim();
+
+  if (!name || !cat) { showToast('Name and Category required', '⚠️'); return; }
+  const specs = specsRaw ? specsRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+
+  const btn = document.getElementById('addSubmitBtn');
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving…';
+  btn.disabled = true;
+
+  if (editId) {
+    // Edit existing
+    const part = parts.find(p => p.id === editId);
+    if (part) { Object.assign(part, { name, category:cat, desc, specs, qty, img }); }
+    const ok = await savePart({ id:editId, name, category:cat, desc, specs, qty, img });
+    if (ok) { showToast(`"${name}" updated`, '✏️'); bootstrap.Modal.getInstance(document.getElementById('addModal')).hide(); renderAll(); }
+  } else {
+    // New part
+    const id = generateId(cat, name);
+    const part = { id, name, category:cat, desc:desc||'No description.', qty, img, specs };
+    parts.unshift(part);
+    const ok = await savePart(part);
+    if (ok) { showToast(`"${name}" added!`, '🔩'); bootstrap.Modal.getInstance(document.getElementById('addModal')).hide(); renderAll(); }
+    else { parts.shift(); } // rollback if save failed
+  }
+
+  btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Save Changes';
+  btn.disabled = false;
+}
+
+/* ════════════════════════════════════════════
+   DELETE
+════════════════════════════════════════════ */
+function openDelete(id) {
+  const p = parts.find(x => x.id === id);
+  if (!p) return;
+  pendingDeleteId = id;
+  document.getElementById('deletePartName').textContent = p.name;
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+async function confirmDelete() {
+  if (!pendingDeleteId) return;
+  const id   = pendingDeleteId;
+  const part = parts.find(p => p.id === id);
+  bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+
+  const ok = await deletePart(id);
+  if (ok) {
+    parts = parts.filter(p => p.id !== id);
+    renderAll();
+    showToast(`"${part?.name}" deleted`, '🗑️');
+  }
+  pendingDeleteId = null;
+}
+
+/* ════════════════════════════════════════════
+   SEARCH
+════════════════════════════════════════════ */
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchQuery = e.target.value;
+  renderGrid();
+});
+
+/* ════════════════════════════════════════════
+   URL DEEP LINK (QR scan)
+════════════════════════════════════════════ */
+function checkUrlParam() {
+  const id = new URLSearchParams(window.location.search).get('part');
+  if (id) setTimeout(() => openDetail(id), 600);
+}
+
+/* ════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════ */
+(function init() {
+  if (API_URL) {
+    document.getElementById('apiUrlInput').value = API_URL;
+    document.getElementById('configBanner').classList.add('hidden');
+    loadParts();
+  } else {
+    // Try cached data while showing the banner
+    const cached = localStorage.getItem(STORAGE_KEY_DATA);
+    if (cached) {
+      parts = JSON.parse(cached);
+      setSyncStatus('offline', 'Cached data');
+      renderAll();
+    }
+  }
+  checkUrlParam();
+})();
+</script>
+</body>
+</html>
